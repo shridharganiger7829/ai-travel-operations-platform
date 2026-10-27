@@ -11,6 +11,8 @@ from schemas import UserCreate, UserLogin
 from auth import hash_password, verify_password
 from security import create_access_token
 
+from dependencies import get_current_user
+
 app = FastAPI(
     title="AI Travel Operations Platform"
 )
@@ -104,4 +106,15 @@ def login_user(
             "email": existing_user.email,
             "role": existing_user.role
         }
+    }
+
+@app.get("/api/auth/me")
+def get_my_profile(
+    current_user: User = Depends(get_current_user)
+):
+    return {
+        "id": current_user.id,
+        "name": current_user.name,
+        "email": current_user.email,
+        "role": current_user.role
     }
