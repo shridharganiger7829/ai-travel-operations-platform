@@ -13,8 +13,8 @@ from security import create_access_token
 
 from dependencies import get_current_user
 
-from models import User, Destination
-from schemas import UserCreate, UserLogin, DestinationCreate, DestinationResponse
+from models import User, Destination,Hotel
+from schemas import UserCreate, UserLogin, DestinationCreate, DestinationResponse, HotelCreate,HotelResponse
 
 app = FastAPI(
     title="AI Travel Operations Platform"
@@ -169,3 +169,53 @@ def get_destination(
         )
 
     return destination
+
+@app.post("/api/hotels", response_model=HotelResponse)
+def create_hotel(
+    hotel: HotelCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role not in ["admin", "travel_agent"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Only admin or travel agent can create hotels"
+        )
+
+    new_hotel = Hotel(
+        name=hotel.name,
+        location=hotel.location,
+        description=hotel.description,
+        price_per_night=hotel.price_per_night,
+        rating=hotel.rating,
+        image_url=hotel.image_url
+    )
+
+    db.add(new_hotel)
+    db.commit()
+    db.refresh(new_hotel)
+
+    return new_hotel
+
+@app.get("/api/hotels", response_model=list[HotelResponse])
+def get_hotels(
+    db: Session = Depends(get_db)
+):
+    return db.query(Hotel).all()
+
+@app.get("/api/hotels/{hotel_id}", response_model=HotelResponse)
+def get_hotel(
+    hotel_id: int,
+    db: Session = Depends(get_db)
+):
+    hotel = db.query(Hotel).filter(
+        Hotel.id == hotel_id
+    ).first()
+
+    if not hotel:
+        raise HTTPException(
+            status_code=404,
+            detail="Hotel not found"
+        )
+
+    return hotel
