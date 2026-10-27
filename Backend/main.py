@@ -13,8 +13,19 @@ from security import create_access_token
 
 from dependencies import get_current_user
 
-from models import User, Destination,Hotel
-from schemas import UserCreate, UserLogin, DestinationCreate, DestinationResponse, HotelCreate,HotelResponse
+from models import User, Destination, Hotel, Activity, Trip
+from schemas import (
+    UserCreate,
+    UserLogin,
+    DestinationCreate,
+    DestinationResponse,
+    HotelCreate,
+    HotelResponse,
+    ActivityCreate,
+    ActivityResponse,
+    TripCreate,
+    TripResponse
+)
 
 app = FastAPI(
     title="AI Travel Operations Platform"
@@ -219,3 +230,108 @@ def get_hotel(
         )
 
     return hotel
+
+@app.post("/api/activities", response_model=ActivityResponse)
+def create_activity(
+    activity: ActivityCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role not in ["admin", "travel_agent"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Only admin or travel agent can create activities"
+        )
+
+    new_activity = Activity(
+        name=activity.name,
+        location=activity.location,
+        description=activity.description,
+        price=activity.price,
+        duration_hours=activity.duration_hours,
+        image_url=activity.image_url
+    )
+
+    db.add(new_activity)
+    db.commit()
+    db.refresh(new_activity)
+
+    return new_activity
+
+@app.get("/api/activities", response_model=list[ActivityResponse])
+def get_activities(
+    db: Session = Depends(get_db)
+):
+    return db.query(Activity).all()
+
+@app.get("/api/activities/{activity_id}", response_model=ActivityResponse)
+def get_activity(
+    activity_id: int,
+    db: Session = Depends(get_db)
+):
+    activity = db.query(Activity).filter(
+        Activity.id == activity_id
+    ).first()
+
+    if not activity:
+        raise HTTPException(
+            status_code=404,
+            detail="Activity not found"
+        )
+
+    return activity
+
+@app.post("/api/trips", response_model=TripResponse)
+def create_trip(
+    trip: TripCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if trip.end_date < trip.start_date:
+        raise HTTPException(
+            status_code=400,
+            detail="End date cannot be before start date"
+        )
+
+    new_trip = Trip(
+        user_id=current_user.id,
+        title=trip.title,
+        destination=trip.destination,
+        start_date=trip.start_date,
+        end_date=trip.end_date,
+        budget=trip.budget
+    )
+
+    db.add(new_trip)
+    db.commit()
+    db.refresh(new_trip)
+
+    return new_trip
+
+@app.get("/api/trips", response_model=list[TripResponse])
+def get_my_trips(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return db.query(Trip).filter(
+        Trip.user_id == current_user.id
+    ).all()
+
+@app.get("/api/trips/{trip_id}", response_model=TripResponse)
+def get_trip(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    trip = db.query(Trip).filter(
+        Trip.id == trip_id,
+        Trip.user_id == current_user.id
+    ).first()
+
+    if not trip:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found"
+        )
+
+    return trip
