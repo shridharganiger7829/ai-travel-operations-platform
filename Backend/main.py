@@ -13,6 +13,9 @@ from security import create_access_token
 
 from dependencies import get_current_user
 
+from models import User, Destination
+from schemas import UserCreate, UserLogin, DestinationCreate, DestinationResponse
+
 app = FastAPI(
     title="AI Travel Operations Platform"
 )
@@ -118,3 +121,51 @@ def get_my_profile(
         "email": current_user.email,
         "role": current_user.role
     }
+
+@app.post("/api/destinations", response_model=DestinationResponse)
+def create_destination(
+    destination: DestinationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role not in ["admin", "travel_agent"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Only admin or travel agent can create destinations"
+        )
+
+    new_destination = Destination(
+        name=destination.name,
+        country=destination.country,
+        description=destination.description,
+        image_url=destination.image_url
+    )
+
+    db.add(new_destination)
+    db.commit()
+    db.refresh(new_destination)
+
+    return new_destination
+
+@app.get("/api/destinations", response_model=list[DestinationResponse])
+def get_destinations(
+    db: Session = Depends(get_db)
+):
+    return db.query(Destination).all()
+
+@app.get("/api/destinations/{destination_id}", response_model=DestinationResponse)
+def get_destination(
+    destination_id: int,
+    db: Session = Depends(get_db)
+):
+    destination = db.query(Destination).filter(
+        Destination.id == destination_id
+    ).first()
+
+    if not destination:
+        raise HTTPException(
+            status_code=404,
+            detail="Destination not found"
+        )
+
+    return destination

@@ -9,3 +9,15 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+class DestinationCreate(BaseModel):
+    name: str
+    country: str
+    description: str
+    image_url: str | None = None
+
+class DestinationResponse(DestinationCreate):
+    id: int
+
+    class Config:
+        from_attributes = True
