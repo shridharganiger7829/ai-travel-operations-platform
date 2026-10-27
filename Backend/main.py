@@ -1,6 +1,14 @@
 from fastapi import FastAPI
 
-app = FastAPI(title="AI Travel Operations Platform")
+from database import engine, Base
+import models
+
+app = FastAPI(
+    title="AI Travel Operations Platform"
+)
+
+
+Base.metadata.create_all(bind=engine)
 
 
 @app.get("/")
