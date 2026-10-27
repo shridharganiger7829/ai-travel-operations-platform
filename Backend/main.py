@@ -13,7 +13,7 @@ from security import create_access_token
 
 from dependencies import get_current_user
 
-from models import User, Destination, Hotel, Activity, Trip
+from models import User, Destination, Hotel, Activity, Trip, ItineraryDay,ItineraryActivity, Booking
 from schemas import (
     UserCreate,
     UserLogin,
@@ -24,7 +24,12 @@ from schemas import (
     ActivityCreate,
     ActivityResponse,
     TripCreate,
-    TripResponse
+    TripResponse,
+    ItineraryDayCreate,
+    ItineraryDayResponse,
+    ItineraryActivityCreate,
+    BookingCreate,
+    BookingResponse
 )
 
 app = FastAPI(
@@ -335,3 +340,235 @@ def get_trip(
         )
 
     return trip
+
+@app.post(
+    "/api/trips/{trip_id}/itinerary",
+    response_model=ItineraryDayResponse
+)
+def create_itinerary_day(
+    trip_id: int,
+    itinerary: ItineraryDayCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    trip = db.query(Trip).filter(
+        Trip.id == trip_id,
+        Trip.user_id == current_user.id
+    ).first()
+
+    if not trip:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found"
+        )
+
+    new_day = ItineraryDay(
+        trip_id=trip_id,
+        day_number=itinerary.day_number,
+        date=itinerary.date,
+        title=itinerary.title,
+        notes=itinerary.notes
+    )
+
+    db.add(new_day)
+    db.commit()
+    db.refresh(new_day)
+
+    return new_day
+
+@app.get(
+    "/api/trips/{trip_id}/itinerary",
+    response_model=list[ItineraryDayResponse]
+)
+def get_itinerary(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    trip = db.query(Trip).filter(
+        Trip.id == trip_id,
+        Trip.user_id == current_user.id
+    ).first()
+
+    if not trip:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found"
+        )
+
+    return db.query(ItineraryDay).filter(
+        ItineraryDay.trip_id == trip_id
+    ).order_by(
+        ItineraryDay.day_number
+    ).all()
+
+@app.post("/api/itinerary/{day_id}/activities")
+def add_activity_to_itinerary(
+    day_id: int,
+    activity_data: ItineraryActivityCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    day = db.query(ItineraryDay).join(
+        Trip,
+        ItineraryDay.trip_id == Trip.id
+    ).filter(
+        ItineraryDay.id == day_id,
+        Trip.user_id == current_user.id
+    ).first()
+
+    if not day:
+        raise HTTPException(
+            status_code=404,
+            detail="Itinerary day not found"
+        )
+
+    activity = db.query(Activity).filter(
+        Activity.id == activity_data.activity_id
+    ).first()
+
+    if not activity:
+        raise HTTPException(
+            status_code=404,
+            detail="Activity not found"
+        )
+
+    new_item = ItineraryActivity(
+        itinerary_day_id=day_id,
+        activity_id=activity_data.activity_id,
+        start_time=activity_data.start_time,
+        end_time=activity_data.end_time,
+        notes=activity_data.notes
+    )
+
+    db.add(new_item)
+    db.commit()
+    db.refresh(new_item)
+
+    return {
+        "message": "Activity added to itinerary",
+        "id": new_item.id
+    }
+
+@app.post(
+    "/api/trips/{trip_id}/bookings",
+    response_model=BookingResponse
+)
+def create_booking(
+    trip_id: int,
+    booking: BookingCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    trip = db.query(Trip).filter(
+        Trip.id == trip_id,
+        Trip.user_id == current_user.id
+    ).first()
+
+    if not trip:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found"
+        )
+
+    if booking.booking_type not in ["hotel", "activity"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Booking type must be hotel or activity"
+        )
+
+    if booking.booking_type == "hotel":
+        item = db.query(Hotel).filter(
+            Hotel.id == booking.reference_id
+        ).first()
+    else:
+        item = db.query(Activity).filter(
+            Activity.id == booking.reference_id
+        ).first()
+
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking item not found"
+        )
+
+    new_booking = Booking(
+        trip_id=trip_id,
+        user_id=current_user.id,
+        booking_type=booking.booking_type,
+        reference_id=booking.reference_id,
+        booking_date=booking.booking_date,
+        amount=booking.amount,
+        status="pending"
+    )
+
+    db.add(new_booking)
+    db.commit()
+    db.refresh(new_booking)
+
+    return new_booking
+
+@app.get(
+    "/api/trips/{trip_id}/bookings",
+    response_model=list[BookingResponse]
+)
+def get_bookings(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    trip = db.query(Trip).filter(
+        Trip.id == trip_id,
+        Trip.user_id == current_user.id
+    ).first()
+
+    if not trip:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found"
+        )
+
+    return db.query(Booking).filter(
+        Booking.trip_id == trip_id,
+        Booking.user_id == current_user.id
+    ).all()
+
+@app.patch("/api/bookings/{booking_id}/status")
+def update_booking_status(
+    booking_id: int,
+    status: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    booking = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.user_id == current_user.id
+    ).first()
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found"
+        )
+
+    allowed_statuses = [
+        "pending",
+        "confirmed",
+        "cancelled"
+    ]
+
+    if status not in allowed_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid booking status"
+        )
+
+    booking.status = status
+
+    db.commit()
+    db.refresh(booking)
+
+    return {
+        "message": "Booking status updated",
+        "status": booking.status
+    }

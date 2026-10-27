@@ -128,3 +128,79 @@ class Trip(Base):
         DateTime,
         default=datetime.utcnow
     )
+
+class ItineraryDay(Base):
+    __tablename__ = "itinerary_days"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+
+    trip_id: Mapped[int] = mapped_column()
+
+    day_number: Mapped[int]
+
+    date: Mapped[date]
+
+    title: Mapped[str] = mapped_column(String(200))
+
+    notes: Mapped[str | None] = mapped_column(
+        String(1000),
+        nullable=True
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+class ItineraryActivity(Base):
+    __tablename__ = "itinerary_activities"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+
+    itinerary_day_id: Mapped[int] = mapped_column()
+
+    activity_id: Mapped[int] = mapped_column()
+
+    start_time: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True
+    )
+
+    end_time: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True
+    )
+
+    notes: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True
+    )
+
+class Booking(Base):
+    __tablename__ = "bookings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+
+    trip_id: Mapped[int] = mapped_column()
+
+    user_id: Mapped[int] = mapped_column()
+
+    booking_type: Mapped[str] = mapped_column(String(50))
+    # hotel / activity
+
+    reference_id: Mapped[int] = mapped_column()
+    # hotel_id or activity_id
+
+    booking_date: Mapped[date] = mapped_column()
+
+    amount: Mapped[float] = mapped_column(default=0)
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        default="pending"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow
+    )

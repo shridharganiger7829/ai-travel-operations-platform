@@ -68,3 +68,39 @@ class TripResponse(TripCreate):
 
     class Config:
         from_attributes = True
+
+class ItineraryDayCreate(BaseModel):
+    day_number: int
+    date: date
+    title: str
+    notes: str | None = None
+
+
+class ItineraryDayResponse(ItineraryDayCreate):
+    id: int
+    trip_id: int
+
+    class Config:
+        from_attributes = True
+
+class ItineraryActivityCreate(BaseModel):
+    activity_id: int
+    start_time: str | None = None
+    end_time: str | None = None
+    notes: str | None = None
+
+class BookingCreate(BaseModel):
+    booking_type: str
+    reference_id: int
+    booking_date: date
+    amount: float
+
+
+class BookingResponse(BookingCreate):
+    id: int
+    trip_id: int
+    user_id: int
+    status: str
+
+    class Config:
+        from_attributes = True
