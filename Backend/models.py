@@ -235,3 +235,35 @@ class TravelDocument(Base):
         DateTime,
         default=datetime.utcnow
     )
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        index=True
+    )
+
+    user_id: Mapped[int] = mapped_column()
+
+    title: Mapped[str] = mapped_column(
+        String(200)
+    )
+
+    message: Mapped[str] = mapped_column(
+        String(1000)
+    )
+
+    notification_type: Mapped[str] = mapped_column(
+        String(50),
+        default="general"
+    )
+
+    is_read: Mapped[bool] = mapped_column(
+        default=False
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow
+    )

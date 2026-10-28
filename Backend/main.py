@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from fastapi import UploadFile, File
 import os
@@ -1177,3 +1178,57 @@ def modify_itinerary(
             status_code=400,
             detail="Unsupported modification action"
         )
+
+
+@app.get("/api/admin/dashboard")
+def admin_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Check admin
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required"
+        )
+
+    total_users = db.query(User).count()
+
+    total_trips = db.query(Trip).count()
+
+    total_bookings = db.query(Booking).count()
+
+    total_hotels = db.query(Hotel).count()
+
+    total_activities = db.query(Activity).count()
+
+    total_revenue = (
+        db.query(func.sum(Booking.amount)).scalar()
+        or 0
+    )
+
+    return {
+        "total_users": total_users,
+        "total_trips": total_trips,
+        "total_bookings": total_bookings,
+        "total_hotels": total_hotels,
+        "total_activities": total_activities,
+        "total_revenue": total_revenue
+    }
+
+@app.get(
+    "/api/notifications",
+    response_model=list[NotificationResponse]
+)
+def get_notifications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    notifications = db.query(Notification).filter(
+        Notification.user_id == current_user.id
+    ).order_by(
+        Notification.created_at.desc()
+    ).all()
+
+    return notifications
