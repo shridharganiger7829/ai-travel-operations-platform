@@ -31,6 +31,7 @@ from ai_itinerary import generate_itinerary
 from ai_modify import understand_modification
 
 from datetime import timedelta
+from models import Notification
 
 from models import (
     User,
@@ -61,7 +62,8 @@ from schemas import (
     BookingResponse,
     TravelDocumentResponse,
     BookingCreateRequest,
-    BookingResponse
+    BookingResponse,
+    NotificationResponse
 )
 
 
@@ -835,6 +837,14 @@ def create_booking(
     db.commit()
     db.refresh(booking)
 
+    create_notification(
+    db=db,
+    user_id=current_user.id,
+    title="Booking Confirmed",
+    message=f"Your {booking.booking_type} booking has been created successfully.",
+    notification_type="booking"
+)
+
     return booking
 
 @app.get("/api/bookings", response_model=list[BookingResponse])
@@ -1180,10 +1190,21 @@ def modify_itinerary(
         )
 
 
+def require_admin(
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required"
+        )
+
+    return current_user
+
 @app.get("/api/admin/dashboard")
 def admin_dashboard(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     # Check admin
     if current_user.role != "admin":
@@ -1232,3 +1253,132 @@ def get_notifications(
     ).all()
 
     return notifications
+
+@app.put("/api/notifications/{notification_id}/read")
+def mark_notification_read(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    notification = db.query(Notification).filter(
+        Notification.id == notification_id,
+        Notification.user_id == current_user.id
+    ).first()
+
+    if not notification:
+        raise HTTPException(
+            status_code=404,
+            detail="Notification not found"
+        )
+
+    notification.is_read = True
+
+    db.commit()
+
+    return {
+        "message": "Notification marked as read"
+    }
+
+def create_notification(
+    db: Session,
+    user_id: int,
+    title: str,
+    message: str,
+    notification_type: str = "general"
+):
+
+    notification = Notification(
+        user_id=user_id,
+        title=title,
+        message=message,
+        notification_type=notification_type
+    )
+
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
+
+    return notification
+
+
+
+@app.get("/api/hotels/search")
+def search_hotels(
+    location: str,
+    min_price: float | None = None,
+    max_price: float | None = None,
+    min_rating: float | None = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Hotel).filter(
+        Hotel.location.ilike(f"%{location}%")
+    )
+
+    if min_price is not None:
+        query = query.filter(
+            Hotel.price_per_night >= min_price
+        )
+
+    if max_price is not None:
+        query = query.filter(
+            Hotel.price_per_night <= max_price
+        )
+
+    if min_rating is not None:
+        query = query.filter(
+            Hotel.rating >= min_rating
+        )
+
+    hotels = query.order_by(
+        Hotel.rating.desc()
+    ).all()
+
+    return hotels
+
+@app.get("/api/activities/search")
+def search_activities(
+    location: str,
+    max_price: float | None = None,
+    max_duration: float | None = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Activity).filter(
+        Activity.location.ilike(f"%{location}%")
+    )
+
+    if max_price is not None:
+        query = query.filter(
+            Activity.price <= max_price
+        )
+
+    if max_duration is not None:
+        query = query.filter(
+            Activity.duration_hours <= max_duration
+        )
+
+    activities = query.order_by(
+        Activity.price.asc()
+    ).all()
+
+    return activities
+
+@app.get("/api/destinations/search")
+def search_destinations(
+    country: str | None = None,
+    name: str | None = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Destination)
+
+    if country:
+        query = query.filter(
+            Destination.country.ilike(f"%{country}%")
+        )
+
+    if name:
+        query = query.filter(
+            Destination.name.ilike(f"%{name}%")
+        )
+
+    return query.all()

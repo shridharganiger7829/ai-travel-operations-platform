@@ -49,7 +49,15 @@ def process_document(document_id: int, file_path: str):
 
         db.commit()
 
-        print("Document processed successfully")
+        notification = Notification(
+        user_id=document.user_id,
+        title="Document Processed",
+        message=f"{document.file_name} has been processed successfully.",
+        notification_type="document"
+         )
+
+        db.add(notification)
+        db.commit()
 
         return extracted_data
 
