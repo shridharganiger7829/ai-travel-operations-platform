@@ -104,3 +104,24 @@ class BookingResponse(BookingCreate):
 
     class Config:
         from_attributes = True
+
+class TravelDocumentResponse(BaseModel):
+    id: int
+    trip_id: int
+    user_id: int
+    document_type: str
+    file_name: str
+    file_url: str
+    extracted_data: str | None
+    status: str
+
+    class Config:
+        from_attributes = True
+
+class ItineraryGenerateRequest(BaseModel):
+    destination: str
+    start_date: date
+    end_date: date
+    budget: float
+    interests: list[str]
+    travel_style: str = "balanced"

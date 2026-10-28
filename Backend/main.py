@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+import json
+
 from database import engine, Base, SessionLocal
 from models import User
 from schemas import UserCreate
@@ -13,7 +15,24 @@ from security import create_access_token
 
 from dependencies import get_current_user
 
-from models import User, Destination, Hotel, Activity, Trip, ItineraryDay,ItineraryActivity, Booking
+from fastapi import UploadFile, File
+import os
+import shutil
+
+from schemas import ItineraryGenerateRequest
+from ai_itinerary import generate_itinerary
+
+from models import (
+    User,
+    Destination,
+    Hotel,
+    Activity,
+    Trip,
+    ItineraryDay,
+    ItineraryActivity,
+    Booking,
+    TravelDocument
+)
 from schemas import (
     UserCreate,
     UserLogin,
@@ -29,7 +48,8 @@ from schemas import (
     ItineraryDayResponse,
     ItineraryActivityCreate,
     BookingCreate,
-    BookingResponse
+    BookingResponse,
+    TravelDocumentResponse
 )
 
 app = FastAPI(
@@ -571,4 +591,95 @@ def update_booking_status(
     return {
         "message": "Booking status updated",
         "status": booking.status
+    }
+
+@app.post("/api/trips/{trip_id}/documents")
+def upload_document(
+    trip_id: int,
+    document_type: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    trip = db.query(Trip).filter(
+        Trip.id == trip_id,
+        Trip.user_id == current_user.id
+    ).first()
+
+    if not trip:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found"
+        )
+
+    allowed_types = [
+        "passport",
+        "visa",
+        "hotel_confirmation",
+        "flight_ticket"
+    ]
+
+    if document_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid document type"
+        )
+
+    upload_dir = "uploads"
+
+    os.makedirs(upload_dir, exist_ok=True)
+
+    file_path = os.path.join(
+        upload_dir,
+        file.filename
+    )
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    document = TravelDocument(
+        trip_id=trip_id,
+        user_id=current_user.id,
+        document_type=document_type,
+        file_name=file.filename,
+        file_url=file_path,
+        status="uploaded"
+    )
+
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    return {
+        "message": "Document uploaded successfully",
+        "document_id": document.id,
+        "file_name": document.file_name,
+        "status": document.status
+    }
+
+@app.post("/api/ai/generate-itinerary")
+def generate_ai_itinerary(
+    request: ItineraryGenerateRequest,
+    current_user: User = Depends(get_current_user)
+):
+    result = generate_itinerary(
+        destination=request.destination,
+        start_date=request.start_date,
+        end_date=request.end_date,
+        budget=request.budget,
+        interests=request.interests,
+        travel_style=request.travel_style
+    )
+
+    try:
+        itinerary = json.loads(result)
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=500,
+            detail="AI returned invalid JSON"
+        )
+
+    return {
+        "message": "AI itinerary generated successfully",
+        "itinerary": itinerary
     }

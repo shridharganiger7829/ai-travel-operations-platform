@@ -1,7 +1,7 @@
 import jwt
 from datetime import datetime, timedelta, timezone
 
-SECRET_KEY = "change-this-later"
+SECRET_KEY = "put_a_long_random_secret_here_aaadadadada"
 ALGORITHM = "HS256"
 
 

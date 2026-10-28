@@ -204,3 +204,34 @@ class Booking(Base):
         DateTime,
         default=datetime.utcnow
     )
+
+class TravelDocument(Base):
+    __tablename__ = "travel_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+
+    trip_id: Mapped[int] = mapped_column()
+
+    user_id: Mapped[int] = mapped_column()
+
+    document_type: Mapped[str] = mapped_column(String(50))
+    # passport / visa / hotel_confirmation / flight_ticket
+
+    file_name: Mapped[str] = mapped_column(String(255))
+
+    file_url: Mapped[str] = mapped_column(String(500))
+
+    extracted_data: Mapped[str | None] = mapped_column(
+        String(5000),
+        nullable=True
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        default="uploaded"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow
+    )
