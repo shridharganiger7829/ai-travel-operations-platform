@@ -1382,3 +1382,120 @@ def search_destinations(
         )
 
     return query.all()
+
+@app.get("/api/trips/{trip_id}/details")
+def get_trip_details(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Find trip
+    trip = db.query(Trip).filter(
+        Trip.id == trip_id,
+        Trip.user_id == current_user.id
+    ).first()
+
+    if not trip:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found"
+        )
+
+    # Get itinerary days
+    days = db.query(ItineraryDay).filter(
+        ItineraryDay.trip_id == trip.id
+    ).order_by(
+        ItineraryDay.day_number
+    ).all()
+
+    itinerary = []
+
+    for day in days:
+
+        itinerary_activities = db.query(
+            ItineraryActivity
+        ).filter(
+            ItineraryActivity.itinerary_day_id == day.id
+        ).all()
+
+        activities = []
+
+        for item in itinerary_activities:
+
+            activity = db.query(Activity).filter(
+                Activity.id == item.activity_id
+            ).first()
+
+            if activity:
+                activities.append({
+                    "id": activity.id,
+                    "name": activity.name,
+                    "location": activity.location,
+                    "description": activity.description,
+                    "price": activity.price,
+                    "duration_hours": activity.duration_hours,
+                    "image_url": activity.image_url,
+                    "start_time": item.start_time,
+                    "end_time": item.end_time,
+                    "notes": item.notes
+                })
+
+        itinerary.append({
+            "id": day.id,
+            "day_number": day.day_number,
+            "date": day.date,
+            "title": day.title,
+            "notes": day.notes,
+            "activities": activities
+        })
+
+    # Get bookings
+    bookings = db.query(Booking).filter(
+        Booking.trip_id == trip.id,
+        Booking.user_id == current_user.id
+    ).all()
+
+    booking_data = []
+
+    for booking in bookings:
+        booking_data.append({
+            "id": booking.id,
+            "booking_type": booking.booking_type,
+            "reference_id": booking.reference_id,
+            "booking_date": booking.booking_date,
+            "amount": booking.amount,
+            "status": booking.status
+        })
+
+    # Get travel documents
+    documents = db.query(TravelDocument).filter(
+        TravelDocument.trip_id == trip.id,
+        TravelDocument.user_id == current_user.id
+    ).all()
+
+    document_data = []
+
+    for document in documents:
+        document_data.append({
+            "id": document.id,
+            "document_type": document.document_type,
+            "file_name": document.file_name,
+            "file_url": document.file_url,
+            "status": document.status,
+            "extracted_data": document.extracted_data
+        })
+
+    return {
+        "trip": {
+            "id": trip.id,
+            "title": trip.title,
+            "destination": trip.destination,
+            "start_date": trip.start_date,
+            "end_date": trip.end_date,
+            "budget": trip.budget,
+            "status": trip.status
+        },
+        "itinerary": itinerary,
+        "bookings": booking_data,
+        "documents": document_data
+    }
