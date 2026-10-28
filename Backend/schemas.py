@@ -125,3 +125,28 @@ class ItineraryGenerateRequest(BaseModel):
     budget: float
     interests: list[str]
     travel_style: str = "balanced"
+
+class BookingCreateRequest(BaseModel):
+    trip_id: int
+    booking_type: str
+    reference_id: int
+    booking_date: date
+    amount: float
+
+
+class BookingResponse(BaseModel):
+    id: int
+    trip_id: int
+    user_id: int
+    booking_type: str
+    reference_id: int
+    booking_date: date
+    amount: float
+    status: str
+
+    class Config:
+        from_attributes = True
+
+class TripModificationRequest(BaseModel):
+    trip_id: int
+    instruction: str

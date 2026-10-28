@@ -2,7 +2,12 @@ from fastapi import FastAPI
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from fastapi import UploadFile, File
+import os
+import shutil
+
 import json
+from tasks import process_document
 
 from database import engine, Base, SessionLocal
 from models import User
@@ -14,6 +19,7 @@ from auth import hash_password, verify_password
 from security import create_access_token
 
 from dependencies import get_current_user
+from schemas import TripModificationRequest
 
 from fastapi import UploadFile, File
 import os
@@ -21,6 +27,9 @@ import shutil
 
 from schemas import ItineraryGenerateRequest
 from ai_itinerary import generate_itinerary
+from ai_modify import understand_modification
+
+from datetime import timedelta
 
 from models import (
     User,
@@ -49,8 +58,12 @@ from schemas import (
     ItineraryActivityCreate,
     BookingCreate,
     BookingResponse,
-    TravelDocumentResponse
+    TravelDocumentResponse,
+    BookingCreateRequest,
+    BookingResponse
 )
+
+
 
 app = FastAPI(
     title="AI Travel Operations Platform"
@@ -660,9 +673,15 @@ def upload_document(
 @app.post("/api/ai/generate-itinerary")
 def generate_ai_itinerary(
     request: ItineraryGenerateRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    result = generate_itinerary(
+
+    # ==========================================
+    # STEP 1: Generate itinerary using Ollama AI
+    # ==========================================
+
+    ai_result = generate_itinerary(
         destination=request.destination,
         start_date=request.start_date,
         end_date=request.end_date,
@@ -671,15 +690,490 @@ def generate_ai_itinerary(
         travel_style=request.travel_style
     )
 
-    try:
-        itinerary = json.loads(result)
-    except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=500,
-            detail="AI returned invalid JSON"
+    # ==========================================
+    # STEP 2: Create Trip
+    # ==========================================
+
+    trip = Trip(
+        user_id=current_user.id,
+        title=f"{request.destination} AI Trip",
+        destination=request.destination,
+        start_date=request.start_date,
+        end_date=request.end_date,
+        budget=request.budget,
+        status="planning"
+    )
+
+    db.add(trip)
+    db.commit()
+    db.refresh(trip)
+
+    # ==========================================
+    # STEP 3: Create Itinerary Days
+    # ==========================================
+
+    current_date = request.start_date
+
+    for day_data in ai_result["days"]:
+
+        itinerary_day = ItineraryDay(
+            trip_id=trip.id,
+            day_number=day_data["day"],
+            date=current_date,
+            title=day_data["title"],
+            notes=None
         )
 
+        db.add(itinerary_day)
+        db.commit()
+        db.refresh(itinerary_day)
+
+        # ==========================================
+        # STEP 4: Create / Find Activities
+        # ==========================================
+
+        for activity_data in day_data["activities"]:
+
+            # Check if activity already exists
+            activity = db.query(Activity).filter(
+                Activity.name == activity_data["name"]
+            ).first()
+
+            # ======================================
+            # If activity doesn't exist, create it
+            # ======================================
+
+            if not activity:
+
+                activity = Activity(
+                    name=activity_data["name"],
+                    location=request.destination,
+                    description=activity_data["description"],
+                    price=activity_data["estimated_cost"],
+                    duration_hours=activity_data["duration_hours"],
+                    image_url=None
+                )
+
+                db.add(activity)
+                db.commit()
+                db.refresh(activity)
+
+            # ==========================================
+            # STEP 5: Connect Activity to Itinerary Day
+            # ==========================================
+
+            itinerary_activity = ItineraryActivity(
+                itinerary_day_id=itinerary_day.id,
+                activity_id=activity.id,
+                start_time=None,
+                end_time=None,
+                notes=activity_data["description"]
+            )
+
+            db.add(itinerary_activity)
+
+        db.commit()
+
+        # Move to next date
+        current_date = current_date + timedelta(days=1)
+
+    # ==========================================
+    # STEP 6: Return Result
+    # ==========================================
+
     return {
-        "message": "AI itinerary generated successfully",
-        "itinerary": itinerary
+        "message": "AI itinerary created successfully",
+
+        "trip_id": trip.id,
+
+        "destination": trip.destination,
+
+        "budget": trip.budget,
+
+        "itinerary": ai_result
     }
+
+@app.post("/api/bookings", response_model=BookingResponse)
+def create_booking(
+    request: BookingCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    # Check whether trip belongs to current user
+    trip = db.query(Trip).filter(
+        Trip.id == request.trip_id,
+        Trip.user_id == current_user.id
+    ).first()
+
+    if not trip:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found"
+        )
+
+    # Validate booking type
+    if request.booking_type not in ["hotel", "activity"]:
+        raise HTTPException(
+            status_code=400,
+            detail="booking_type must be hotel or activity"
+        )
+
+    # Create booking
+    booking = Booking(
+        trip_id=request.trip_id,
+        user_id=current_user.id,
+        booking_type=request.booking_type,
+        reference_id=request.reference_id,
+        booking_date=request.booking_date,
+        amount=request.amount,
+        status="pending"
+    )
+
+    db.add(booking)
+    db.commit()
+    db.refresh(booking)
+
+    return booking
+
+@app.get("/api/bookings", response_model=list[BookingResponse])
+def get_my_bookings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    bookings = db.query(Booking).filter(
+        Booking.user_id == current_user.id
+    ).all()
+
+    return bookings
+
+@app.patch("/api/bookings/{booking_id}/confirm")
+def confirm_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    booking = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.user_id == current_user.id
+    ).first()
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found"
+        )
+
+    if booking.status == "cancelled":
+        raise HTTPException(
+            status_code=400,
+            detail="Cancelled booking cannot be confirmed"
+        )
+
+    booking.status = "confirmed"
+
+    db.commit()
+    db.refresh(booking)
+
+    return {
+        "message": "Booking confirmed",
+        "booking_id": booking.id,
+        "status": booking.status
+    }
+
+
+@app.patch("/api/bookings/{booking_id}/cancel")
+def cancel_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    booking = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.user_id == current_user.id
+    ).first()
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found"
+        )
+
+    if booking.status == "cancelled":
+        raise HTTPException(
+            status_code=400,
+            detail="Booking is already cancelled"
+        )
+
+    booking.status = "cancelled"
+
+    db.commit()
+    db.refresh(booking)
+
+    return {
+        "message": "Booking cancelled",
+        "booking_id": booking.id,
+        "status": booking.status
+    }
+
+@app.post("/api/trips/{trip_id}/documents")
+def upload_document(
+    trip_id: int,
+    document_type: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    # Check trip
+    trip = db.query(Trip).filter(
+        Trip.id == trip_id,
+        Trip.user_id == current_user.id
+    ).first()
+
+    if not trip:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found"
+        )
+
+    # Allowed document types
+    allowed_types = [
+        "passport",
+        "visa",
+        "hotel_confirmation",
+        "flight_ticket"
+    ]
+
+    if document_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid document type"
+        )
+
+    # Create uploads folder
+    upload_dir = "uploads"
+    os.makedirs(upload_dir, exist_ok=True)
+
+    # Create safe filename
+    file_path = os.path.join(
+        upload_dir,
+        file.filename
+    )
+
+    # Save file
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # Save document information
+    document = TravelDocument(
+        trip_id=trip_id,
+        user_id=current_user.id,
+        document_type=document_type,
+        file_name=file.filename,
+        file_url=file_path,
+        status="uploaded"
+    )
+
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    document.status = "processing"
+    db.commit()
+
+    process_document.delay(
+    document.id,
+    file_path
+    )
+
+    return {
+        "message": "Document uploaded successfully",
+        "document_id": document.id,
+        "file_name": document.file_name,
+        "status": document.status
+    }
+
+@app.post("/api/ai/modify-itinerary")
+def modify_itinerary(
+    request: TripModificationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    # ==========================================
+    # STEP 1: Find the trip
+    # ==========================================
+
+    trip = db.query(Trip).filter(
+        Trip.id == request.trip_id,
+        Trip.user_id == current_user.id
+    ).first()
+
+    if not trip:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found"
+        )
+
+    # ==========================================
+    # STEP 2: Get itinerary days
+    # ==========================================
+
+    days = db.query(ItineraryDay).filter(
+        ItineraryDay.trip_id == trip.id
+    ).order_by(
+        ItineraryDay.day_number
+    ).all()
+
+    itinerary = {
+        "destination": trip.destination,
+        "days": []
+    }
+
+    for day in days:
+
+        activities = db.query(ItineraryActivity).filter(
+            ItineraryActivity.itinerary_day_id == day.id
+        ).all()
+
+        day_data = {
+            "day": day.day_number,
+            "title": day.title,
+            "activities": []
+        }
+
+        for itinerary_activity in activities:
+
+            activity = db.query(Activity).filter(
+                Activity.id == itinerary_activity.activity_id
+            ).first()
+
+            if activity:
+
+                day_data["activities"].append({
+                    "name": activity.name,
+                    "description": activity.description,
+                    "estimated_cost": activity.price,
+                    "duration_hours": activity.duration_hours
+                })
+
+        itinerary["days"].append(day_data)
+
+    # ==========================================
+    # STEP 3: Ask AI to understand request
+    # ==========================================
+
+    modification = understand_modification(
+        request.instruction,
+        itinerary
+    )
+
+    action = modification["action"]
+    day_number = modification["day_number"]
+
+    # ==========================================
+    # STEP 4: Find requested day
+    # ==========================================
+
+    itinerary_day = db.query(ItineraryDay).filter(
+        ItineraryDay.trip_id == trip.id,
+        ItineraryDay.day_number == day_number
+    ).first()
+
+    if not itinerary_day:
+        raise HTTPException(
+            status_code=404,
+            detail="Itinerary day not found"
+        )
+
+    # ==========================================
+    # STEP 5: ADD ACTIVITY
+    # ==========================================
+
+    if action == "add_activity":
+
+        activity = db.query(Activity).filter(
+            Activity.name == modification["activity_name"]
+        ).first()
+
+        if not activity:
+
+            activity = Activity(
+                name=modification["activity_name"],
+                location=trip.destination,
+                description=modification["description"],
+                price=modification["estimated_cost"],
+                duration_hours=modification["duration_hours"],
+                image_url=None
+            )
+
+            db.add(activity)
+            db.commit()
+            db.refresh(activity)
+
+        itinerary_activity = ItineraryActivity(
+            itinerary_day_id=itinerary_day.id,
+            activity_id=activity.id,
+            notes=activity.description
+        )
+
+        db.add(itinerary_activity)
+
+        db.commit()
+
+        return {
+            "message": "Activity added successfully",
+            "action": "add_activity",
+            "activity": activity.name,
+            "day": day_number
+        }
+
+    # ==========================================
+    # STEP 6: REMOVE ACTIVITY
+    # ==========================================
+
+    elif action == "remove_activity":
+
+        activity = db.query(Activity).filter(
+            Activity.name == modification["activity_name"]
+        ).first()
+
+        if not activity:
+            raise HTTPException(
+                status_code=404,
+                detail="Activity not found"
+            )
+
+        itinerary_activity = db.query(
+            ItineraryActivity
+        ).filter(
+            ItineraryActivity.itinerary_day_id == itinerary_day.id,
+            ItineraryActivity.activity_id == activity.id
+        ).first()
+
+        if not itinerary_activity:
+            raise HTTPException(
+                status_code=404,
+                detail="Activity is not present on this day"
+            )
+
+        db.delete(itinerary_activity)
+        db.commit()
+
+        return {
+            "message": "Activity removed successfully",
+            "action": "remove_activity",
+            "activity": activity.name,
+            "day": day_number
+        }
+
+    else:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported modification action"
+        )
