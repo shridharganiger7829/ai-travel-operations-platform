@@ -3,6 +3,8 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
+from fastapi.middleware.cors import CORSMiddleware
+
 from fastapi import UploadFile, File
 import os
 import shutil
@@ -70,6 +72,17 @@ from schemas import (
 
 app = FastAPI(
     title="AI Travel Operations Platform"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 Base.metadata.create_all(bind=engine)
@@ -1383,119 +1396,103 @@ def search_destinations(
 
     return query.all()
 
-@app.get("/api/trips/{trip_id}/details")
-def get_trip_details(
+
+
+@app.delete("/api/trips/{trip_id}")
+def delete_trip(
     trip_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Find trip
     trip = db.query(Trip).filter(
         Trip.id == trip_id,
         Trip.user_id == current_user.id
     ).first()
 
     if not trip:
-        raise HTTPException(
-            status_code=404,
-            detail="Trip not found"
-        )
+        raise HTTPException(status_code=404, detail="Trip not found")
 
-    # Get itinerary days
-    days = db.query(ItineraryDay).filter(
-        ItineraryDay.trip_id == trip.id
-    ).order_by(
-        ItineraryDay.day_number
-    ).all()
-
-    itinerary = []
-
+    days = db.query(ItineraryDay).filter(ItineraryDay.trip_id == trip.id).all()
     for day in days:
+        db.query(ItineraryActivity).filter(ItineraryActivity.itinerary_day_id == day.id).delete()
+        db.delete(day)
 
-        itinerary_activities = db.query(
-            ItineraryActivity
-        ).filter(
+    db.query(Booking).filter(Booking.trip_id == trip.id).delete()
+    db.query(TravelDocument).filter(TravelDocument.trip_id == trip.id).delete()
+    db.delete(trip)
+    db.commit()
+
+    return {"message": "Trip deleted successfully"}
+
+@app.get("/api/trips/{trip_id}/full-itinerary")
+def get_full_itinerary(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    trip = db.query(Trip).filter(
+        Trip.id == trip_id,
+        Trip.user_id == current_user.id
+    ).first()
+
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    days = db.query(ItineraryDay).filter(
+        ItineraryDay.trip_id == trip_id
+    ).order_by(ItineraryDay.day_number).all()
+
+    result = []
+    for day in days:
+        itinerary_activities = db.query(ItineraryActivity).filter(
             ItineraryActivity.itinerary_day_id == day.id
         ).all()
 
-        activities = []
-
-        for item in itinerary_activities:
-
-            activity = db.query(Activity).filter(
-                Activity.id == item.activity_id
-            ).first()
-
-            if activity:
-                activities.append({
-                    "id": activity.id,
-                    "name": activity.name,
-                    "location": activity.location,
-                    "description": activity.description,
-                    "price": activity.price,
-                    "duration_hours": activity.duration_hours,
-                    "image_url": activity.image_url,
-                    "start_time": item.start_time,
-                    "end_time": item.end_time,
-                    "notes": item.notes
+        activities_list = []
+        for ia in itinerary_activities:
+            act = db.query(Activity).filter(Activity.id == ia.activity_id).first()
+            if act:
+                activities_list.append({
+                    "id": ia.id,
+                    "activity_id": act.id,
+                    "name": act.name,
+                    "location": act.location,
+                    "description": act.description,
+                    "price": act.price,
+                    "duration_hours": act.duration_hours,
+                    "image_url": act.image_url,
+                    "start_time": ia.start_time,
+                    "end_time": ia.end_time,
+                    "notes": ia.notes
                 })
 
-        itinerary.append({
+        result.append({
             "id": day.id,
+            "trip_id": day.trip_id,
             "day_number": day.day_number,
-            "date": day.date,
+            "date": str(day.date),
             "title": day.title,
             "notes": day.notes,
-            "activities": activities
+            "activities": activities_list
         })
 
-    # Get bookings
-    bookings = db.query(Booking).filter(
-        Booking.trip_id == trip.id,
-        Booking.user_id == current_user.id
-    ).all()
+    return result
 
-    booking_data = []
+@app.get("/api/trips/{trip_id}/documents", response_model=list[TravelDocumentResponse])
+def get_trip_documents(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    trip = db.query(Trip).filter(
+        Trip.id == trip_id,
+        Trip.user_id == current_user.id
+    ).first()
 
-    for booking in bookings:
-        booking_data.append({
-            "id": booking.id,
-            "booking_type": booking.booking_type,
-            "reference_id": booking.reference_id,
-            "booking_date": booking.booking_date,
-            "amount": booking.amount,
-            "status": booking.status
-        })
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
 
-    # Get travel documents
-    documents = db.query(TravelDocument).filter(
-        TravelDocument.trip_id == trip.id,
+    return db.query(TravelDocument).filter(
+        TravelDocument.trip_id == trip_id,
         TravelDocument.user_id == current_user.id
-    ).all()
-
-    document_data = []
-
-    for document in documents:
-        document_data.append({
-            "id": document.id,
-            "document_type": document.document_type,
-            "file_name": document.file_name,
-            "file_url": document.file_url,
-            "status": document.status,
-            "extracted_data": document.extracted_data
-        })
-
-    return {
-        "trip": {
-            "id": trip.id,
-            "title": trip.title,
-            "destination": trip.destination,
-            "start_date": trip.start_date,
-            "end_date": trip.end_date,
-            "budget": trip.budget,
-            "status": trip.status
-        },
-        "itinerary": itinerary,
-        "bookings": booking_data,
-        "documents": document_data
-    }
+    ).order_by(TravelDocument.created_at.desc()).all()
