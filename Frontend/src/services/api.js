@@ -1,10 +1,10 @@
 import axios from "axios";
 
+// Primary API Base URL (FastAPI)
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
@@ -27,7 +27,6 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Don't auto-redirect on login or register check
       const url = error.config?.url || "";
       if (!url.includes("/api/auth/login") && !url.includes("/api/auth/register")) {
         console.warn("Session expired or unauthorized. Clearing credentials.");
@@ -38,6 +37,33 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Safe helper to extract clean, friendly error messages from API responses
+export const formatApiError = (error, fallbackMessage = "An error occurred.") => {
+  if (!error) return fallbackMessage;
+
+  // FastAPI detail field
+  if (error.response?.data?.detail) {
+    const detail = error.response.data.detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+      // Pydantic 422 validation errors: [{ msg, loc, type }]
+      return detail.map((item) => item.msg || JSON.stringify(item)).join(". ");
+    }
+    return JSON.stringify(detail);
+  }
+
+  if (error.response?.data?.message) {
+    return error.response.data.message;
+  }
+
+  // Network / server connection error
+  if (error.message === "Network Error" || error.code === "ERR_NETWORK" || !error.response) {
+    return "Cannot connect to server. Please verify the backend is running on port 8000.";
+  }
+
+  return error.message || fallbackMessage;
+};
 
 // Auth endpoints
 export const authAPI = {
@@ -78,7 +104,6 @@ export const tripAPI = {
     return response.data;
   },
   getFullItinerary: async (tripId) => {
-    // Falls back gracefully if backend hasn't loaded full-itinerary
     try {
       const response = await api.get(`/api/trips/${tripId}/full-itinerary`);
       return response.data;

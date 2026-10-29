@@ -2,14 +2,19 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
+  ArrowLeft,
   Eye,
   EyeOff,
   Mail,
   Lock,
   Plane,
   Sparkles,
+  Check,
+  AlertCircle,
+  MapPin,
 } from "lucide-react";
 import { useAuth } from "../Context/AuthContext";
+import { formatApiError } from "../services/api";
 import "./Auth.css";
 
 export default function Login() {
@@ -40,12 +45,12 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login(formData.email, formData.password);
+      await login(formData.email.trim(), formData.password);
       navigate("/dashboard", { replace: true });
     } catch (error) {
       console.error("LOGIN ERROR:", error);
       setErrorMessage(
-        error.response?.data?.detail || "Invalid email or password. Please try again."
+        formatApiError(error, "Invalid email or password. Please try again.")
       );
     } finally {
       setLoading(false);
@@ -54,137 +59,183 @@ export default function Login() {
 
   return (
     <div className="auth-page">
-      {/* Background */}
-      <div className="auth-background">
-        <div className="auth-gradient"></div>
-        <div className="auth-glow glow-one"></div>
-        <div className="auth-glow glow-two"></div>
+      {/* Decorative background blobs */}
+      <div className="auth-bg-decor">
+        <div className="auth-bg-blob-1"></div>
+        <div className="auth-bg-blob-2"></div>
       </div>
 
-      {/* Navbar */}
-      <header className="auth-navbar">
-        <Link to="/" className="auth-logo">
-          <div className="logo-icon">
-            <Plane size={20} />
+      {/* Header */}
+      <header className="auth-header">
+        <Link to="/" className="auth-brand">
+          <div className="auth-brand-icon">
+            <Plane size={22} />
           </div>
-          <span>TripAI</span>
+          <span>
+            Trip<span>AI</span>
+          </span>
         </Link>
 
-        <Link to="/" className="back-home">
-          Back to website
-          <ArrowRight size={17} />
+        <Link to="/" className="auth-back-link">
+          <ArrowLeft size={16} />
+          <span>Back to Home</span>
         </Link>
       </header>
 
-      {/* Main */}
-      <main className="auth-container">
-        {/* Visual Showcase */}
-        <section className="auth-visual">
-          <div className="visual-badge">
-            <Sparkles size={16} />
-            <span>AI Itinerary Generator</span>
+      {/* Main Layout */}
+      <main className="auth-main-layout">
+        {/* Left Hero Showcase */}
+        <section className="auth-hero-showcase">
+          <div className="auth-badge">
+            <Sparkles size={15} />
+            <span>AI Travel Intelligence</span>
           </div>
 
-          <h2>
-            Explore the world with an AI travel companion built just for you.
-          </h2>
+          <h1 className="auth-hero-title">
+            Welcome back to your <span>travel command center.</span>
+          </h1>
 
-          <p>
-            Instant itineraries, verified hotel bookings, travel document processing, and real-time smart modifications.
+          <p className="auth-hero-subtitle">
+            Log in to manage your personalized day-by-day itineraries, track reservations,
+            and collaborate with your AI Travel Co-pilot.
           </p>
 
-          <div className="visual-card">
-            <div className="visual-avatar">AI</div>
-            <div className="visual-content">
-              <strong>Your Parisian Adventure</strong>
-              <span>5 Days • Louvre, Eiffel Tower, Montmartre</span>
+          <div className="auth-features-list">
+            <div className="auth-feature-item">
+              <div className="auth-feature-check">
+                <Check size={14} />
+              </div>
+              <p>
+                Real-time AI Schedule Optimizer
+                <span>Instant itinerary adjustments based on budget and timing</span>
+              </p>
             </div>
+
+            <div className="auth-feature-item">
+              <div className="auth-feature-check">
+                <Check size={14} />
+              </div>
+              <p>
+                Hotels & Activities Hub
+                <span>Verified boutique accommodations and scheduled excursions</span>
+              </p>
+            </div>
+
+            <div className="auth-feature-item">
+              <div className="auth-feature-check">
+                <Check size={14} />
+              </div>
+              <p>
+                Smart Travel Document Vault
+                <span>Secure storage with automatic flight and hotel extraction</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Interactive Preview Card */}
+          <div className="auth-itinerary-preview">
+            <div className="auth-preview-icon">
+              <MapPin size={24} />
+            </div>
+            <div className="auth-preview-details">
+              <h4>Amalfi Coast & Capri Adventure</h4>
+              <p>5 Days • 12 Activities • Balanced Pace</p>
+            </div>
+            <span className="auth-preview-tag">Confirmed</span>
           </div>
         </section>
 
-        {/* Form Card */}
-        <section className="auth-card">
-          <div className="card-header">
-            <h3>Welcome back</h3>
-            <p>Log in to access your planned trips and reservations.</p>
-          </div>
-
-          {errorMessage && (
-            <div
-              style={{
-                backgroundColor: "#fef2f2",
-                border: "1px solid #fecaca",
-                color: "#b91c1c",
-                borderRadius: "10px",
-                padding: "12px",
-                fontSize: "13px",
-                marginBottom: "16px",
-              }}
-            >
-              {errorMessage}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="auth-form">
-            <div className="form-group">
-              <label htmlFor="email">Email address</label>
-              <div className="input-box">
-                <Mail size={18} className="input-icon" />
-                <input
-                  id="email"
-                  type="email"
-                  name="email"
-                  placeholder="traveler@example.com"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+        {/* Right Form Card */}
+        <div className="auth-card-wrapper">
+          <section className="auth-form-card">
+            <div className="auth-card-top">
+              <h2>Sign in to your account</h2>
+              <p>Enter your email and password to access your trips and bookings.</p>
             </div>
 
-            <div className="form-group">
-              <div className="label-row">
-                <label htmlFor="password">Password</label>
+            {errorMessage && (
+              <div className="auth-alert-error">
+                <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="auth-form">
+              <div className="auth-field-group">
+                <label className="auth-label" htmlFor="login-email">
+                  Email Address
+                </label>
+                <div className="auth-input-container">
+                  <Mail size={19} className="auth-input-icon" />
+                  <input
+                    id="login-email"
+                    type="email"
+                    name="email"
+                    placeholder="name@example.com"
+                    value={formData.email}
+                    onChange={handleChange}
+                    autoComplete="email"
+                    required
+                  />
+                </div>
               </div>
 
-              <div className="input-box">
-                <Lock size={18} className="input-icon" />
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  name="password"
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                />
-                <button
-                  type="button"
-                  className="password-toggle"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
+              <div className="auth-field-group">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "9px" }}>
+                  <label className="auth-label" htmlFor="login-password" style={{ margin: 0 }}>
+                    Password
+                  </label>
+                </div>
+                <div className="auth-input-container">
+                  <Lock size={19} className="auth-input-icon" />
+                  <input
+                    id="login-password"
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    placeholder="Enter your password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    autoComplete="current-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="auth-password-toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                  </button>
+                </div>
               </div>
+
+              <button
+                type="submit"
+                className="auth-submit-btn"
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Sparkles size={18} className="spin-slow" />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign In to Dashboard</span>
+                    <ArrowRight size={18} />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="auth-card-footer">
+              <p>
+                Don't have an account yet?{" "}
+                <Link to="/register">Create free account</Link>
+              </p>
             </div>
-
-            <button
-              type="submit"
-              className="submit-button"
-              disabled={loading}
-            >
-              {loading ? "Signing in..." : "Sign in"}
-              <ArrowRight size={17} />
-            </button>
-          </form>
-
-          <div className="auth-footer">
-            <p>
-              Don't have an account yet?{" "}
-              <Link to="/register">Create free account</Link>
-            </p>
-          </div>
-        </section>
+          </section>
+        </div>
       </main>
     </div>
   );

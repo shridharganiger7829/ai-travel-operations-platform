@@ -482,7 +482,6 @@ export default function Explore() {
                               style={{
                                 padding: "8px 16px",
                                 borderRadius: "8px",
-                                border: "none",
                                 background: "#f5f3ff",
                                 color: "#5b4df7",
                                 border: "1px solid #ddd6fe",
