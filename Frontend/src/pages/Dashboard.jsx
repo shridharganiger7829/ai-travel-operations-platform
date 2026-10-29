@@ -9,7 +9,6 @@ import {
   Sparkles,
   Wallet,
   ArrowRight,
-  TrendingUp,
   Compass,
 } from "lucide-react";
 

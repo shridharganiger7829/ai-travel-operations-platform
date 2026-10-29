@@ -6,10 +6,7 @@ import {
   Wallet,
   MapPin,
   Check,
-  Compass,
   ArrowRight,
-  Plane,
-  Clock,
   Layers,
   AlertCircle,
 } from "lucide-react";
