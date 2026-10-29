@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { MapPin, Calendar, Wallet, ArrowRight, Trash2, Sparkles } from "lucide-react";
+import { MapPin, Calendar, Wallet, ArrowRight, Trash2 } from "lucide-react";
 
 export default function TripCard({ trip, onDelete }) {
   const navigate = useNavigate();

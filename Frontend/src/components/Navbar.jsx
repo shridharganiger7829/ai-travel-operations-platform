@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plane, Bell, Sparkles, User, LogOut, Check, CheckCircle2 } from "lucide-react";
+import { Plane, Bell, Sparkles } from "lucide-react";
 import { useAuth } from "../Context/AuthContext";
 import { notificationAPI } from "../services/api";
 

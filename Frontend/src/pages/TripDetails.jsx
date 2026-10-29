@@ -7,8 +7,6 @@ import {
   Clock,
   Sparkles,
   Plus,
-  Trash2,
-  CheckCircle2,
   FileText,
   Hotel,
   Upload,
@@ -17,8 +15,6 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
-  Tag,
-  DollarSign,
 } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";

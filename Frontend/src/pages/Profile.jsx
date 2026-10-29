@@ -1,5 +1,5 @@
 import React from "react";
-import { User, Mail, Shield, Calendar, LogOut, CheckCircle2 } from "lucide-react";
+import { User, Mail, Shield, LogOut } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../Context/AuthContext";

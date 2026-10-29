@@ -7,10 +7,7 @@ import {
   Compass,
   Star,
   Clock,
-  Plus,
   Sparkles,
-  ArrowRight,
-  Filter,
 } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";

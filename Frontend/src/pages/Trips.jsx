@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Map,
   Plus,
   Search,
   Sparkles,
-  Filter,
-  Calendar,
   Compass,
 } from "lucide-react";
 import Sidebar from "../components/Sidebar";

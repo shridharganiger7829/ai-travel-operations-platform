@@ -4,7 +4,6 @@ import {
   Compass,
   Map,
   Hotel,
-  Sparkles,
   Plane,
   User,
   LogOut,

@@ -3,7 +3,6 @@ import {
   Hotel,
   Compass,
   CheckCircle,
-  XCircle,
   Clock,
   Wallet,
   Sparkles,
