@@ -1,0 +1,33 @@
+name: Keep Supabase & Backend Active
+
+on:
+  schedule:
+    # Runs every 3 days at 00:00 UTC to ensure Supabase 7-day inactivity timer never triggers
+    - cron: '0 0 */3 * *'
+  workflow_dispatch: # Allows manual run anytime from GitHub Actions tab
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Deployed Service & Database
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          echo "Starting Keep-Alive ping at $(date)..."
+          
+          # If deployed Backend URL is configured in GitHub Secrets
+          if [ -n "$BACKEND_URL" ]; then
+            echo "Pinging Backend Service at $BACKEND_URL..."
+            curl -s -f "$BACKEND_URL/docs" > /dev/null && echo "Backend is online!" || echo "Backend ping sent."
+          fi
+
+          # If direct Supabase REST endpoint is configured in GitHub Secrets
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
+            echo "Pinging Supabase Database REST API..."
+            curl -s -f -H "apikey: $SUPABASE_ANON_KEY" "$SUPABASE_URL/rest/v1/" > /dev/null && echo "Supabase is active!" || echo "Supabase ping sent."
+          fi
+
+          echo "Keep-Alive routine completed successfully."

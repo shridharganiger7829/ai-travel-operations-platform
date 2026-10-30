@@ -16,6 +16,12 @@ if DATABASE_URL.startswith("postgres://"):
 elif DATABASE_URL.startswith("postgresql://") and "+psycopg" not in DATABASE_URL:
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
+# Ensure SSL requirement for cloud-hosted databases (Supabase, Neon, etc.)
+if any(cloud_host in DATABASE_URL for cloud_host in ["supabase", "neon.tech", "aivencloud", "render.com"]):
+    if "sslmode" not in DATABASE_URL:
+        separator = "&" if "?" in DATABASE_URL else "?"
+        DATABASE_URL += f"{separator}sslmode=require"
+
 engine = create_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(
