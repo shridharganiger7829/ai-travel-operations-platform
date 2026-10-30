@@ -46,7 +46,7 @@ export default function Login() {
 
     try {
       await login(formData.email.trim(), formData.password);
-      navigate("/dashboard", { replace: true });
+      navigate("/", { replace: true });
     } catch (error) {
       console.error("LOGIN ERROR:", error);
       setErrorMessage(
@@ -221,7 +221,7 @@ export default function Login() {
                   </>
                 ) : (
                   <>
-                    <span>Sign In to Dashboard</span>
+                    <span>Sign In</span>
                     <ArrowRight size={18} />
                   </>
                 )}

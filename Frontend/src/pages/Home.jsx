@@ -36,7 +36,7 @@ const destinations = [
 
 function Home() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
 
   const handleStartPlanning = () => {
     if (isAuthenticated) {
@@ -63,13 +63,24 @@ function Home() {
           <a href="#features">Features</a>
           <a href="#destinations">Destinations</a>
           <Link to="/explore">Explore Stays</Link>
+          {isAuthenticated && <Link to="/trips">My Trips</Link>}
         </nav>
 
         <div className="nav-actions">
           {isAuthenticated ? (
-            <button className="nav-start-btn" onClick={() => navigate("/dashboard")}>
-              Dashboard <ArrowRight size={17} />
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button className="nav-start-btn" onClick={() => navigate("/dashboard")}>
+                Dashboard <ArrowRight size={17} />
+              </button>
+              <button
+                className="login-btn"
+                onClick={logout}
+                style={{ cursor: "pointer" }}
+                title="Log out"
+              >
+                Logout
+              </button>
+            </div>
           ) : (
             <>
               <button className="login-btn" onClick={() => navigate("/login")}>
