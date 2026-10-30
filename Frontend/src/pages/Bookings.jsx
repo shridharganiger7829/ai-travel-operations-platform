@@ -7,15 +7,22 @@ import {
   Wallet,
   Sparkles,
   Calendar,
+  Upload,
+  FileText,
 } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
-import { bookingAPI } from "../services/api";
+import { bookingAPI, documentAPI } from "../services/api";
 
 export default function Bookings() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // Document upload modal state
+  const [uploadModalBooking, setUploadModalBooking] = useState(null);
+  const [docFile, setDocFile] = useState(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   useEffect(() => {
     loadBookings();
@@ -55,6 +62,35 @@ export default function Bookings() {
     } catch (err) {
       console.error(err);
       alert("Failed to cancel booking.");
+    }
+  };
+
+  const handleUploadBookingDoc = async (e) => {
+    e.preventDefault();
+    if (!docFile || !uploadModalBooking) {
+      alert("Please select a document to upload.");
+      return;
+    }
+
+    setUploadingDoc(true);
+    try {
+      const docType =
+        uploadModalBooking.booking_type === "hotel"
+          ? "hotel_confirmation"
+          : "flight_ticket";
+
+      await documentAPI.upload(uploadModalBooking.trip_id, docType, docFile);
+      await bookingAPI.confirm(uploadModalBooking.id);
+
+      alert("Confirmation voucher uploaded and booking confirmed!");
+      setUploadModalBooking(null);
+      setDocFile(null);
+      loadBookings();
+    } catch (err) {
+      console.error("Voucher upload error:", err);
+      alert("Failed to upload document.");
+    } finally {
+      setUploadingDoc(false);
     }
   };
 
@@ -270,7 +306,27 @@ export default function Bookings() {
                     </span>
 
                     {b.status === "pending" && (
-                      <div style={{ display: "flex", gap: "8px" }}>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <button
+                          onClick={() => setUploadModalBooking(b)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            padding: "7px 14px",
+                            borderRadius: "8px",
+                            border: "1px solid #c7d2fe",
+                            backgroundColor: "#eef2ff",
+                            color: "#4f46e5",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                          title="Upload voucher PDF or image"
+                        >
+                          <Upload size={13} />
+                          Upload Voucher to Confirm
+                        </button>
                         <button
                           onClick={() => handleConfirm(b.id)}
                           style={{
@@ -306,6 +362,108 @@ export default function Bookings() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* MODAL: UPLOAD VOUCHER FOR BOOKING */}
+          {uploadModalBooking && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                backgroundColor: "rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 110,
+                padding: "20px",
+              }}
+            >
+              <div
+                style={{
+                  backgroundColor: "#ffffff",
+                  borderRadius: "16px",
+                  padding: "28px",
+                  width: "100%",
+                  maxWidth: "480px",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                  <div style={{ width: "38px", height: "38px", borderRadius: "10px", backgroundColor: "#eef2ff", color: "#4f46e5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Upload size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: "#111827" }}>
+                      Upload Booking Confirmation
+                    </h3>
+                    <span style={{ fontSize: "12px", color: "#6b7280" }}>
+                      Reservation #{uploadModalBooking.id} • Trip #{uploadModalBooking.trip_id}
+                    </span>
+                  </div>
+                </div>
+
+                <p style={{ margin: "0 0 18px 0", fontSize: "13px", color: "#4b5563", lineHeight: 1.5 }}>
+                  Attach your hotel voucher, flight e-ticket, or tour booking receipt. Our AI will automatically extract key details and mark this reservation as confirmed.
+                </p>
+
+                <form onSubmit={handleUploadBookingDoc}>
+                  <div style={{ marginBottom: "18px" }}>
+                    <label style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "8px" }}>
+                      Select Confirmation File (PDF, PNG, JPG)
+                    </label>
+                    <input
+                      type="file"
+                      required
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      onChange={(e) => setDocFile(e.target.files[0])}
+                      style={{
+                        width: "100%",
+                        padding: "10px",
+                        borderRadius: "8px",
+                        border: "1px dashed #c7d2fe",
+                        backgroundColor: "#fbfbfe",
+                        boxSizing: "border-box",
+                        fontSize: "13px"
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                    <button
+                      type="button"
+                      disabled={uploadingDoc}
+                      onClick={() => {
+                        setUploadModalBooking(null);
+                        setDocFile(null);
+                      }}
+                      style={{ padding: "10px 16px", borderRadius: "8px", border: "1px solid #d1d5db", backgroundColor: "#fff", cursor: "pointer", fontSize: "13px" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={uploadingDoc || !docFile}
+                      style={{
+                        padding: "10px 20px",
+                        borderRadius: "8px",
+                        border: "none",
+                        backgroundColor: "#5b4df7",
+                        color: "#fff",
+                        fontWeight: 600,
+                        fontSize: "13px",
+                        cursor: uploadingDoc || !docFile ? "not-allowed" : "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px"
+                      }}
+                    >
+                      <Upload size={15} />
+                      {uploadingDoc ? "Uploading & Confirming..." : "Upload & Confirm"}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           )}
         </main>

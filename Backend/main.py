@@ -1260,6 +1260,130 @@ def admin_dashboard(
         "total_revenue": total_revenue
     }
 
+@app.get("/api/admin/users")
+def get_admin_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    users = db.query(User).order_by(User.id.asc()).all()
+    result = []
+    for u in users:
+        trips_count = db.query(Trip).filter(Trip.user_id == u.id).count()
+        bookings_count = db.query(Booking).filter(Booking.user_id == u.id).count()
+        result.append({
+            "id": u.id,
+            "name": u.name,
+            "email": u.email,
+            "role": u.role,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+            "total_trips": trips_count,
+            "total_bookings": bookings_count
+        })
+    return result
+
+@app.get("/api/admin/trips")
+def get_admin_trips(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    trips = db.query(Trip).order_by(Trip.id.desc()).all()
+    result = []
+    for t in trips:
+        user = db.query(User).filter(User.id == t.user_id).first()
+        bookings_count = db.query(Booking).filter(Booking.trip_id == t.id).count()
+        result.append({
+            "id": t.id,
+            "user_id": t.user_id,
+            "user_name": user.name if user else "Unknown User",
+            "user_email": user.email if user else "Unknown Email",
+            "title": t.title,
+            "destination": t.destination,
+            "start_date": t.start_date.isoformat() if t.start_date else None,
+            "end_date": t.end_date.isoformat() if t.end_date else None,
+            "budget": t.budget,
+            "status": t.status,
+            "bookings_count": bookings_count,
+            "created_at": t.created_at.isoformat() if t.created_at else None
+        })
+    return result
+
+@app.get("/api/admin/bookings")
+def get_admin_bookings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    bookings = db.query(Booking).order_by(Booking.id.desc()).all()
+    result = []
+    for b in bookings:
+        user = db.query(User).filter(User.id == b.user_id).first()
+        trip = db.query(Trip).filter(Trip.id == b.trip_id).first()
+        item_name = "Reservation"
+        if b.booking_type == "hotel":
+            hotel = db.query(Hotel).filter(Hotel.id == b.reference_id).first()
+            if hotel:
+                item_name = hotel.name
+        elif b.booking_type == "activity":
+            activity = db.query(Activity).filter(Activity.id == b.reference_id).first()
+            if activity:
+                item_name = activity.name
+
+        result.append({
+            "id": b.id,
+            "trip_id": b.trip_id,
+            "trip_title": trip.title if trip else f"Trip #{b.trip_id}",
+            "user_id": b.user_id,
+            "user_name": user.name if user else "Unknown User",
+            "user_email": user.email if user else "Unknown Email",
+            "booking_type": b.booking_type,
+            "reference_id": b.reference_id,
+            "item_name": item_name,
+            "booking_date": b.booking_date.isoformat() if b.booking_date else None,
+            "amount": b.amount,
+            "status": b.status,
+            "created_at": b.created_at.isoformat() if b.created_at else None
+        })
+    return result
+
+@app.get("/api/admin/hotels")
+def get_admin_hotels(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    hotels = db.query(Hotel).order_by(Hotel.id.asc()).all()
+    result = []
+    for h in hotels:
+        result.append({
+            "id": h.id,
+            "name": h.name,
+            "location": h.location,
+            "description": h.description,
+            "price_per_night": h.price_per_night,
+            "rating": h.rating,
+            "image_url": h.image_url,
+            "created_at": h.created_at.isoformat() if h.created_at else None
+        })
+    return result
+
+@app.get("/api/admin/activities")
+def get_admin_activities(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    activities = db.query(Activity).order_by(Activity.id.asc()).all()
+    result = []
+    for a in activities:
+        result.append({
+            "id": a.id,
+            "name": a.name,
+            "location": a.location,
+            "description": a.description,
+            "price": a.price,
+            "duration_hours": a.duration_hours,
+            "image_url": a.image_url,
+            "created_at": a.created_at.isoformat() if a.created_at else None
+        })
+    return result
+
 @app.get(
     "/api/notifications",
     response_model=list[NotificationResponse]

@@ -273,6 +273,26 @@ export const adminAPI = {
     const response = await api.get("/api/admin/dashboard");
     return response.data;
   },
+  getUsers: async () => {
+    const response = await api.get("/api/admin/users");
+    return response.data;
+  },
+  getTrips: async () => {
+    const response = await api.get("/api/admin/trips");
+    return response.data;
+  },
+  getBookings: async () => {
+    const response = await api.get("/api/admin/bookings");
+    return response.data;
+  },
+  getHotels: async () => {
+    const response = await api.get("/api/admin/hotels");
+    return response.data;
+  },
+  getActivities: async () => {
+    const response = await api.get("/api/admin/activities");
+    return response.data;
+  },
 };
 
 export default api;
