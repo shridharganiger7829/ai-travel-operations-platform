@@ -24,7 +24,7 @@
 
 | Role | Email | Password | Permissions |
 | :--- | :--- | :--- | :--- |
-| **Platform Administrator** | `shridhar@example.com` | `admin123` | Full access: PostgreSQL Data Explorer, global metrics, inventory management |
+| **Platform Administrator** | `shridhar@example.com` | `Test@12345` | Full access: PostgreSQL Data Explorer, global metrics, inventory management |
 | **Standard Traveler** | `testuser123@example.com` | `password123` | AI itinerary creation, booking catalog, document vault, profile |
 | *New Users* | *Any valid email* | *Self-register* | Instant account provisioning via `/register` |
 
