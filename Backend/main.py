@@ -11,6 +11,7 @@ import shutil
 
 import json
 from tasks import process_document
+from storage_service import upload_to_supabase, is_supabase_storage_configured
 
 from database import engine, Base, SessionLocal
 from models import User
@@ -89,7 +90,7 @@ if prod_frontend_url:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
+    allow_origin_regex=r"^(https?://(localhost|127\.0\.0\.1)(:[0-9]+)?|https://.*\.vercel\.app)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -633,7 +634,7 @@ def update_booking_status(
     }
 
 @app.post("/api/trips/{trip_id}/documents")
-def upload_document(
+async def upload_document(
     trip_id: int,
     document_type: str,
     file: UploadFile = File(...),
@@ -664,24 +665,39 @@ def upload_document(
             detail="Invalid document type"
         )
 
-    upload_dir = "uploads"
+    file_bytes = await file.read()
+    filename = file.filename
 
-    os.makedirs(upload_dir, exist_ok=True)
+    # 1. Try uploading to Supabase Storage
+    cloud_uploaded = False
+    file_url = ""
+    if is_supabase_storage_configured():
+        success, url_or_err = upload_to_supabase(
+            file_bytes=file_bytes,
+            filename=filename,
+            content_type=file.content_type,
+            path_prefix=f"trip_{trip_id}"
+        )
+        if success:
+            cloud_uploaded = True
+            file_url = url_or_err
 
-    file_path = os.path.join(
-        upload_dir,
-        file.filename
-    )
+    # 2. Local fallback if Supabase Storage is not configured or failed
+    if not cloud_uploaded:
+        upload_dir = "uploads"
+        os.makedirs(upload_dir, exist_ok=True)
+        file_path = os.path.join(upload_dir, filename)
+        with open(file_path, "wb") as buffer:
+            buffer.write(file_bytes)
+        file_url = file_path
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
+    # 3. Save document record in PostgreSQL
     document = TravelDocument(
         trip_id=trip_id,
         user_id=current_user.id,
         document_type=document_type,
-        file_name=file.filename,
-        file_url=file_path,
+        file_name=filename,
+        file_url=file_url,
         status="uploaded"
     )
 
@@ -689,10 +705,25 @@ def upload_document(
     db.commit()
     db.refresh(document)
 
+    # 4. Optional asynchronous parsing (safe execution)
+    try:
+        upload_dir = "uploads"
+        os.makedirs(upload_dir, exist_ok=True)
+        local_path = os.path.join(upload_dir, filename)
+        if not os.path.exists(local_path):
+            with open(local_path, "wb") as buffer:
+                buffer.write(file_bytes)
+        process_document.delay(document.id, local_path)
+        document.status = "processing"
+        db.commit()
+    except Exception:
+        pass
+
     return {
         "message": "Document uploaded successfully",
         "document_id": document.id,
         "file_name": document.file_name,
+        "file_url": document.file_url,
         "status": document.status
     }
 
@@ -953,83 +984,7 @@ def cancel_booking(
         "status": booking.status
     }
 
-@app.post("/api/trips/{trip_id}/documents")
-def upload_document(
-    trip_id: int,
-    document_type: str,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
 
-    # Check trip
-    trip = db.query(Trip).filter(
-        Trip.id == trip_id,
-        Trip.user_id == current_user.id
-    ).first()
-
-    if not trip:
-        raise HTTPException(
-            status_code=404,
-            detail="Trip not found"
-        )
-
-    # Allowed document types
-    allowed_types = [
-        "passport",
-        "visa",
-        "hotel_confirmation",
-        "flight_ticket"
-    ]
-
-    if document_type not in allowed_types:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid document type"
-        )
-
-    # Create uploads folder
-    upload_dir = "uploads"
-    os.makedirs(upload_dir, exist_ok=True)
-
-    # Create safe filename
-    file_path = os.path.join(
-        upload_dir,
-        file.filename
-    )
-
-    # Save file
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    # Save document information
-    document = TravelDocument(
-        trip_id=trip_id,
-        user_id=current_user.id,
-        document_type=document_type,
-        file_name=file.filename,
-        file_url=file_path,
-        status="uploaded"
-    )
-
-    db.add(document)
-    db.commit()
-    db.refresh(document)
-
-    document.status = "processing"
-    db.commit()
-
-    process_document.delay(
-    document.id,
-    file_path
-    )
-
-    return {
-        "message": "Document uploaded successfully",
-        "document_id": document.id,
-        "file_name": document.file_name,
-        "status": document.status
-    }
 
 @app.post("/api/ai/modify-itinerary")
 def modify_itinerary(
@@ -1223,6 +1178,13 @@ def require_admin(
         )
 
     return current_user
+
+@app.post("/api/admin/storage/migrate")
+def migrate_storage_files(
+    current_user: User = Depends(require_admin)
+):
+    from storage_service import migrate_local_files_to_supabase
+    return migrate_local_files_to_supabase()
 
 @app.get("/api/admin/dashboard")
 def admin_dashboard(
